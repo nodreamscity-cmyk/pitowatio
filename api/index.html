@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Analizador PitoWatio/hora (PW/h)</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Bebas+Neue&family=Barlow+Condensed:wght@300;400;600;700&display=swap');
+
+  :root {
+    --bg: #0a0c0e;
+    --panel: #111418;
+    --border: #2a3040;
+    --accent: #e8a020;
+    --accent2: #c0392b;
+    --green: #27ae60;
+    --text: #c8d0dc;
+    --muted: #556070;
+    --scanline: rgba(255,255,255,0.015);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Barlow Condensed', sans-serif;
+    min-height: 100vh;
+    padding: 20px;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      var(--scanline) 2px,
+      var(--scanline) 4px
+    );
+    pointer-events: none;
+    z-index: 1000;
+  }
+
+  .container {
+    max-width: 760px;
+    margin: 0 auto;
+  }
+
+  .header {
+    border: 1px solid var(--accent);
+    padding: 16px 24px;
+    margin-bottom: 20px;
+    position: relative;
+    background: linear-gradient(135deg, #111418 0%, #0d1015 100%);
+  }
+
+  .header::before {
+    content: 'INSTITUT SUPERIOR DE TERMODINÀMICA MASCULINA — VERSIÓ 3.7.2';
+    position: absolute;
+    top: -9px;
+    left: 20px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    color: var(--accent);
+    background: var(--bg);
+    padding: 0 8px;
+    letter-spacing: 1px;
+  }
+
+  .header::after {
+    content: 'CLASIFICADO: MACHO USO';
+    position: absolute;
+    top: -9px;
+    right: 20px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    color: var(--accent2);
+    background: var(--bg);
+    padding: 0 8px;
+    letter-spacing: 1px;
+  }
+
+  .title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 48px;
+    letter-spacing: 4px;
+    color: var(--accent);
+    line-height: 1;
+    text-shadow: 0 0 30px rgba(232,160,32,0.3);
+  }
+
+  .title span { color: #fff; }
+
+  .subtitle {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 4px;
+    letter-spacing: 2px;
+  }
+
+  .unit-badge {
+    display: inline-block;
+    background: var(--accent2);
+    color: #fff;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 14px;
+    letter-spacing: 2px;
+    padding: 2px 10px;
+    margin-top: 8px;
+  }
+
+  .panel {
+    border: 1px solid var(--border);
+    background: var(--panel);
+    padding: 20px;
+    margin-bottom: 16px;
+    position: relative;
+  }
+
+  .panel-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+    letter-spacing: 2px;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+  }
+
+  textarea {
+    width: 100%;
+    background: #07090b;
+    border: 1px solid var(--border);
+    border-radius: 0;
+    color: var(--text);
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 16px;
+    padding: 12px 16px;
+    resize: vertical;
+    min-height: 90px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  textarea:focus { border-color: var(--accent); }
+  textarea::placeholder { color: var(--muted); }
+
+  .btn {
+    display: block;
+    width: 100%;
+    background: var(--accent);
+    border: none;
+    color: #000;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    letter-spacing: 4px;
+    padding: 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-top: 14px;
+  }
+
+  .btn:hover { background: #f0b030; transform: translateY(-1px); }
+  .btn:active { transform: translateY(0); }
+  .btn:disabled { background: var(--muted); cursor: not-allowed; transform: none; }
+
+  .meter-container {
+    display: none;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .meter-container.visible { display: flex; }
+
+  .pw-display {
+    text-align: center;
+    padding: 24px;
+    border: 1px solid var(--border);
+    background: #07090b;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .pw-display::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at center, rgba(232,160,32,0.04) 0%, transparent 70%);
+  }
+
+  .pw-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 3px;
+    margin-bottom: 8px;
+  }
+
+  .pw-value {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 88px;
+    line-height: 1;
+    letter-spacing: 4px;
+    transition: color 0.5s;
+  }
+
+  .pw-unit {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 14px;
+    color: var(--accent);
+    letter-spacing: 3px;
+    margin-top: 4px;
+  }
+
+  .pw-verdict {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 20px;
+    letter-spacing: 3px;
+    margin-top: 10px;
+  }
+
+  .gauge-bar {
+    height: 12px;
+    background: #07090b;
+    border: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+    margin: 16px 0 4px;
+  }
+
+  .gauge-fill {
+    height: 100%;
+    width: 0%;
+    transition: width 1s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    position: relative;
+  }
+
+  .gauge-ticks {
+    display: flex;
+    justify-content: space-between;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 8px;
+    color: var(--muted);
+    padding: 0 2px;
+  }
+
+  .analysis-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .epigraph-item {
+    border: 1px solid var(--border);
+    background: #07090b;
+    padding: 12px;
+  }
+
+  .ep-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 6px;
+  }
+
+  .ep-name {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+    letter-spacing: 1px;
+  }
+
+  .ep-score {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+  }
+
+  .ep-bar {
+    height: 3px;
+    background: var(--border);
+  }
+
+  .ep-fill {
+    height: 100%;
+    width: 0%;
+    transition: width 0.8s ease;
+  }
+
+  .ep-note {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 6px;
+    line-height: 1.4;
+  }
+
+  .analysis-text {
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--text);
+    border-left: 3px solid var(--accent);
+    padding-left: 16px;
+  }
+
+  .loading-text {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    color: var(--accent);
+    text-align: center;
+    padding: 30px;
+    letter-spacing: 2px;
+    display: none;
+  }
+
+  .loading-text.visible { display: block; }
+
+  .blink { animation: blink 1s step-end infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .disclaimer {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 8px;
+    color: #2a3040;
+    text-align: center;
+    line-height: 1.8;
+    padding-top: 10px;
+    letter-spacing: 1px;
+  }
+
+  .delta {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 13px;
+    letter-spacing: 2px;
+    padding: 2px 8px;
+    margin-left: 6px;
+  }
+  .delta.up { background: rgba(39,174,96,0.2); color: var(--green); }
+  .delta.down { background: rgba(192,57,43,0.2); color: var(--accent2); }
+  .delta.neutral { background: rgba(85,96,112,0.2); color: var(--muted); }
+
+  @keyframes flicker {
+    0%, 95%, 100% { opacity: 1; }
+    96% { opacity: 0.7; }
+    97% { opacity: 1; }
+    98% { opacity: 0.6; }
+  }
+  .pw-value { animation: flicker 8s infinite; }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <div class="title"><span>Pito</span>Watio<span>/h</span></div>
+    <div class="subtitle">SISTEMA DE CUANTIFICACIÓN DE MASCULINIDAD — ENERGÍA MASCULINA OBJETIVIZADA</div>
+    <div class="unit-badge">PW/h · Unidad SI No Reconocida</div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-label">// ENTRADA DE ACTIVIDAD — DESCRÍBELA CON PRECISIÓN OPERACIONAL</div>
+    <textarea id="activity" placeholder="Ej: He ido al Mercadona con el carro, elegido el yogur griego, y cedido el paso a una señora mayor..."></textarea>
+    <button class="btn" id="analyzeBtn" onclick="analyze()">⚡ CALCULAR PW/h</button>
+  </div>
+
+  <div class="loading-text" id="loading">
+    ANALIZANDO TERMODINÁMICA MASCULINA <span class="blink">█</span>
+  </div>
+
+  <div class="meter-container" id="results">
+
+    <div class="pw-display">
+      <div class="pw-label">NIVEL DE ENERGÍA MASCULINA CUANTIFICADA</div>
+      <div class="pw-value" id="pwValue">—</div>
+      <div class="pw-unit">PitoWatios / hora</div>
+      <div class="gauge-bar">
+        <div class="gauge-fill" id="gaugeFill"></div>
+      </div>
+      <div class="gauge-ticks">
+        <span>0 · PARGUELA</span>
+        <span>250</span>
+        <span>500 · NOMINAL</span>
+        <span>750</span>
+        <span>1000 · ALFA</span>
+      </div>
+      <div class="pw-verdict" id="verdict"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-label">// ANÁLISIS TERMODINÁMICO</div>
+      <div class="analysis-text" id="analysisText"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-label">// EVALUACIÓN POR EPÍGRAFES — DESGLOSE VECTORIAL</div>
+      <div class="analysis-grid" id="epigraphGrid"></div>
+    </div>
+
+  </div>
+
+  <div class="disclaimer">
+    PW/h NO ES UNA UNIDAD RECONOCIDA POR EL SISTEMA INTERNACIONAL DE UNIDADES · CUALQUIER PARECIDO CON LA REALIDAD ES ESTADÍSTICAMENTE IRRELEVANTE<br>
+    ANTROPIC DECLINA RESPONSABILIDAD SOBRE MASCULINIDADES HERIDAS · © INSTITUT SUPERIOR DE TERMODINÀMICA MASCULINA
+  </div>
+
+</div>
+
+<script>
+const INDEX_SUMMARY = `
+# Sistema de Cuantificación PitoWatio/hora (PW/h)
+
+EPÍGRAFE I — Locomoción y Ocupación del Espacio:
+Pisada estratégica, estacionamiento de la unidad (cómo sentarse y ocupar espacio), dominio del entorno doméstico, retirada ordenada, cruce y cesión en acera.
+
+EPÍGRAFE II — Fonación y Proyección de Presencia:
+Gravedad vocal, evitación de uplift final y vibrato dubitativo, pausa dramática, vocabulario de camaradería (bro, máquina), carcajada vs ronquido nasal, sonidos guturales de afirmación.
+
+EPÍGRAFE III — Cuerpo, Máquina Orgánica:
+Físico trabajado y apreciación del pene, tejido adiposo como reserva estratégica, rituales de Endura, agua fría y carácter, estoicismo ante lesiones, exhibición de marcas de esfuerzo.
+
+EPÍGRAFE IV — Interacción y Mercado Social:
+Reconocimiento de estatus, apretón de manos, dinámicas de ronda y pago, el chiste y su validación, entrada en territorio ajeno, despedida y su ejecución.
+
+EPÍGRAFE V — Comportamiento y Filosofía:
+Código de lealtad, defensa de opiniones mediante hooliganismo, emociones permitidas, represión como camino correcto, ética del herramental, relación del reciclaje con la homosexualidad, cripto vs fiat, evasión fiscal.
+
+EPÍGRAFE VI — Equipo, Objetos y Mundo Material:
+El vehículo como prótesis (y su relación con el pene), decoración del hogar, marca del móvil, vestimenta funcional (colorimetría sin ser gay), relojes/linternas/gadgets, coleccionismo vs frikismo.
+
+EPÍGRAFE VII — Despliegue y Apetencia de Violencia:
+Por qué mencionar violencia siempre, guerras y su relación con erecciones, la violencia como diálogo y solución universal.
+`;
+
+const EPIGRAPH_NAMES = [
+  { id: "I", name: "LOCOMOCIÓN" },
+  { id: "II", name: "FONACIÓN" },
+  { id: "III", name: "CUERPO/MÁQUINA" },
+  { id: "IV", name: "MERCADO SOCIAL" },
+  { id: "V", name: "FILOSOFÍA" },
+  { id: "VI", name: "OBJETOS" },
+  { id: "VII", name: "VIOLENCIA" },
+];
+
+const VERDICTS = {
+  veryLow: ["ENERGÍA CRÍTICA — REQUIERE REVISIÓN DE MOTOR", "PARGUELA CUÁNTICO", "MERECES UN CACTUS EN LUGAR DE UN CINTURÓN", "NIVEL: YOGUR DESNATADO"],
+  low: ["POR DEBAJO DEL UMBRAL DE IGNICIÓN", "SE DETECTAN FILTRACIONES DE SENSIBILIDAD", "POTENCIA SUBÓPTIMA", "CORRIENTE ALTERNA DETECTADA — CORREGIR"],
+  mid: ["MASCULINIDAD FUNCIONAL PERO NO ESPECTACULAR", "NIVEL MEDIO: MACHO DE FERRETERÍA", "OPERATIVO · SIN GLORIA", "DIESEL DE CIUDAD — CUMPLE PERO NO IMPRESIONA"],
+  high: ["ENERGÍA VIRIL EN PARÁMETROS NOMINALES", "MOTORES EN PUNTO DE DISEÑO", "MACHO DE ALTO RENDIMIENTO DETECTADO", "TESTOSTERONA EN CICLO CERRADO"],
+  veryHigh: ["ALFA TERMODINÁMICO CONFIRMADO", "PITOWATIOS AL LÍMITE DE LA ESTRUCTURA", "ENERGÍA MASCULINA PURA Y DURA", "PELIGRO DE EXPLOSIÓN VIRIL — EVACUAR RADIO 50M"]
+};
+
+function getVerdict(score) {
+  if (score < 150) return VERDICTS.veryLow[Math.floor(Math.random()*4)];
+  if (score < 350) return VERDICTS.low[Math.floor(Math.random()*4)];
+  if (score < 550) return VERDICTS.mid[Math.floor(Math.random()*4)];
+  if (score < 750) return VERDICTS.high[Math.floor(Math.random()*4)];
+  return VERDICTS.veryHigh[Math.floor(Math.random()*4)];
+}
+
+function getColor(score) {
+  if (score < 200) return '#c0392b';
+  if (score < 400) return '#e67e22';
+  if (score < 600) return '#f1c40f';
+  if (score < 800) return '#27ae60';
+  return '#e8a020';
+}
+
+function getGradient(score) {
+  if (score < 200) return 'linear-gradient(90deg, #c0392b, #e74c3c)';
+  if (score < 400) return 'linear-gradient(90deg, #e67e22, #f39c12)';
+  if (score < 600) return 'linear-gradient(90deg, #f1c40f, #f39c12)';
+  if (score < 800) return 'linear-gradient(90deg, #27ae60, #2ecc71)';
+  return 'linear-gradient(90deg, #e8a020, #f0c040)';
+}
+
+async function analyze() {
+  const activity = document.getElementById('activity').value.trim();
+  if (!activity) return;
+
+  const btn = document.getElementById('analyzeBtn');
+  const loading = document.getElementById('loading');
+  const results = document.getElementById('results');
+
+  btn.disabled = true;
+  loading.classList.add('visible');
+  results.classList.remove('visible');
+
+  const prompt = `Eres el Analizador Oficial de PitoWatios/hora (PW/h), la unidad de medida de la "energía masculina" según el Sistema de Cuantificación de Masculinidad. Tu tono es el de un informe técnico absolutamente solemne, como si esto fuera termodinámica real. No hay humor explícito: la gracia está en la seriedad con la que tratas esta absurdidad.
+
+El índice tiene 7 epígrafes:
+${INDEX_SUMMARY}
+
+El usuario describe esta actividad: "${activity}"
+
+Debes responder ÚNICAMENTE con un JSON válido con esta estructura exacta:
+{
+  "total_pw": <número entre 0 y 1000, entero>,
+  "analysis": "<párrafo de 3-4 frases en tono técnico solemne evaluando la actividad según el índice. Usa terminología pseudocientífica masculina con total seriedad. Sin asteriscos ni markdown.>",
+  "epigraphs": {
+    "I": { "score": <0-100>, "delta": <"up"|"down"|"neutral">, "note": "<1 frase técnica breve>" },
+    "II": { "score": <0-100>, "delta": <"up"|"down"|"neutral">, "note": "<1 frase técnica breve>" },
+    "III": { "score": <0-100>, "delta": <"up"|"down"|"neutral">, "note": "<1 frase técnica breve>" },
+    "IV": { "score": <0-100>, "delta": <"up"|"down"|"neutral">, "note": "<1 frase técnica breve>" },
+    "V": { "score": <0-100>, "delta": <"up"|"down"|"neutral">, "note": "<1 frase técnica breve>" },
+    "VI": { "score": <0-100>, "delta": <"up"|"down"|"neutral">, "note": "<1 frase técnica breve>" },
+    "VII": { "score": <0-100>, "delta": <"up"|"down"|"neutral">, "note": "<1 frase técnica breve>" }
+  }
+}
+
+Solo JSON. Sin texto adicional. Sin bloques de código.`;
+
+  try {
+    // Llamada al proxy de Vercel en lugar de directamente a Anthropic
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1000,
+        messages: [{ role: "user", content: prompt }]
+      })
+    });
+
+    const data = await response.json();
+    const text = data.content.map(i => i.text || "").join("\n");
+    const clean = text.replace(/```json|```/g, "").trim();
+    const parsed = JSON.parse(clean);
+
+    renderResults(parsed);
+  } catch(e) {
+    document.getElementById('loading').innerHTML = `<span style="color:#c0392b">ERROR DE LECTURA VIRIL — REINTENTAR OPERACIÓN</span>`;
+  } finally {
+    btn.disabled = false;
+    loading.classList.remove('visible');
+  }
+}
+
+function renderResults(data) {
+  const score = data.total_pw;
+  const color = getColor(score);
+  const gradient = getGradient(score);
+
+  document.getElementById('pwValue').textContent = score;
+  document.getElementById('pwValue').style.color = color;
+  document.getElementById('verdict').textContent = getVerdict(score);
+  document.getElementById('verdict').style.color = color;
+
+  setTimeout(() => {
+    const fill = document.getElementById('gaugeFill');
+    fill.style.background = gradient;
+    fill.style.width = (score / 10) + '%';
+  }, 100);
+
+  document.getElementById('analysisText').textContent = data.analysis;
+
+  const grid = document.getElementById('epigraphGrid');
+  grid.innerHTML = '';
+
+  EPIGRAPH_NAMES.forEach(ep => {
+    const epData = data.epigraphs[ep.id];
+    const epColor = getColor(epData.score * 10);
+    const deltaClass = epData.delta;
+    const deltaSymbol = epData.delta === 'up' ? '▲' : epData.delta === 'down' ? '▼' : '—';
+
+    const div = document.createElement('div');
+    div.className = 'epigraph-item';
+    div.innerHTML = `
+      <div class="ep-header">
+        <span class="ep-name">EP.${ep.id} · ${ep.name}</span>
+        <span class="ep-score" style="color:${epColor}">${epData.score}<span class="delta ${deltaClass}">${deltaSymbol}</span></span>
+      </div>
+      <div class="ep-bar"><div class="ep-fill" style="background:${epColor}" data-width="${epData.score}"></div></div>
+      <div class="ep-note">${epData.note}</div>
+    `;
+    grid.appendChild(div);
+  });
+
+  document.getElementById('results').classList.add('visible');
+
+  setTimeout(() => {
+    document.querySelectorAll('.ep-fill').forEach(el => {
+      el.style.width = el.dataset.width + '%';
+    });
+  }, 150);
+}
+</script>
+</body>
+</html>
